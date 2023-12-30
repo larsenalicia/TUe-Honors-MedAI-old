@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from scipy.fft import rfft, rfftfreq
 from mne.time_frequency import psd_array_multitaper
 from typing import Optional
+from sklearn.decomposition import PCA
 
 class FeatureExtraction(ABC):
     """Store Feature Extraction methods"""
@@ -107,17 +108,66 @@ class BandwisePowerTransform(FeatureExtraction):
     """Extract bandwise power in canonical spectral ranges"""
     
     def transform(self, psds: np.ndarray | MultitaperSpectralTransform | FourierTransform, 
-                freqs: Optional[np.ndarray]):
+                freqs: Optional[np.ndarray] = None):
         if isinstance(psds, np.ndarray):
-            NotImplemented
+            return self.raw_transform(psds, freqs)
+            print("sth")
         
-        if isinstance(psds, MultitaperSpectralTransform):
-            NotImplemented
+        elif isinstance(psds, MultitaperSpectralTransform):
+            ms_transformer = psds 
+            psds = ms_transformer.psds
+            freqs = ms_transformer.freqs 
+            return self.raw_transform(psds, freqs)
         
-        if isinstance(psds, FourierTransform):
-            NotImplemented
-    
+        elif isinstance(psds, FourierTransform):
+            ft_output = psds.fft_output
+            ft_output = ft_output.reshape(1, ft_output.shape[0]) # Reshape to 2-D since FT returns 1-D
+            freqs = psds.freq
+            return self.raw_transform(ft_output, freqs)
+            
+    @staticmethod
+    def raw_transform(psds: np.ndarray, freqs: np.ndarray) -> np.ndarray:
+        """Compute avg estimated power in selected frequency band. There are in 
+        order slow, delta, theta, beta, and gamma wave.
+        """
+        slow = BandwisePowerTransform.extract_bandwise_power(psds, freqs, 0, 1)
+        delta = BandwisePowerTransform.extract_bandwise_power(psds, freqs, 4, 8)
+        theta = BandwisePowerTransform.extract_bandwise_power(psds, freqs, 8, 13)
+        beta = BandwisePowerTransform.extract_bandwise_power(psds, freqs, 13, 25)
+        gamma = BandwisePowerTransform.extract_bandwise_power(psds, freqs, 25, 50)
 
-    def raw_transform():
-        NotImplemented
+        return np.array([slow, delta, theta, 
+                        beta, gamma])
+    
+    @staticmethod
+    def extract_bandwise_power(psds: np.ndarray, freqs: np.ndarray, 
+                            fmin: int | float, fmax: int | float) -> np.ndarray:
+        """
+        Note:
+        ---------
+        Take in an array of psd and its frequency bins. Compute filtering on the selected
+        band frequency. Take the average of estimated power.
+        """
+        
+        filter = (freqs <= fmax) & (freqs >= fmin)
+        if sum(filter) == 0: print("Not available bandwise freqs") # Add warning if missing freq band
+        return np.average(psds[:, filter], axis=1) 
+
+
+class PCATransform(FeatureExtraction):
+    """Extract n-th first principle components from psds. So from 100 dims to n dims"""
+
+    def __init__(self, n_components) -> None:
+        self.n_components = n_components
+
+    def transform(self, psds_transform: MultitaperSpectralTransform | np.ndarray):
+        """Using PCA method in sklearn to extract nth first princicple components"""
+        
+        if isinstance(psds_transform, MultitaperSpectralTransform):
+            pca = PCA(n_components=self.n_components)
+            return pca.fit_transform(psds_transform.psds)
+        
+        if isinstance(psds_transform, np.ndarray):
+            NotImplemented
+
     
