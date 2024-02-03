@@ -5,7 +5,7 @@ from sklearn.linear_model import LinearRegression
 
 # The Neural Network structure
 class Model(nn.Module):
-    def __init__(self, input_layer = 50, h1 = 100, h2 = 300, h3 = 50, output_layer = 100):
+    def __init__(self, input_layer = 50, h1 = 100, h2 = 300, h3 = 50, output_layer = 1):
         super().__init__()
         self.layer1 = nn.Linear(input_layer, h1)
         self.layer2 = nn.Linear(h1, h2)
